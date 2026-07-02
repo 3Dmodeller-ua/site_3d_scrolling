@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Sting - Interactive Presentation</title>
+    <title>Sting - Scroll Presentation Loop</title>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap');
@@ -18,9 +18,8 @@
             background-color: #0b0b0b;
             color: #fff;
             font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-            overflow: hidden; /* Скрол вимкнено, анімація програється сама */
-            height: 100vh;
-            width: 100%;
+            overflow-x: hidden;
+            scroll-behavior: auto;
         }
 
         /* Шапка */
@@ -49,22 +48,33 @@
             text-decoration: none;
         }
 
-        /* Повноекранна сцена */
-        .scene-view {
+        /* Велика зона прокрутки для анімації */
+        .scroll-container {
             position: relative;
             width: 100%;
+            height: 1000vh; /* Довжина скролу, щоб два кола анімації крутилися плавно */
+        }
+
+        /* Зафіксований екран для Canvas */
+        .sticky-scene {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
             height: 100vh;
+            overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
             background-color: #0b0b0b;
-            padding-top: 70px;
+            z-index: 1;
         }
 
         canvas {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Зберігає вертикальні пропорції 1080x1920 */
+            object-fit: contain; /* Пропорції 1080x1920 */
+            pointer-events: none;
         }
 
         .loading {
@@ -77,7 +87,49 @@
             font-weight: bold;
             transition: opacity 0.5s ease;
         }
+
+        /* Текстова секція, яка відкривається ПІСЛЯ завершення всіх кіл */
+        .next-section {
+            position: relative;
+            z-index: 10;
+            background-color: #0b0b0b;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .content-section {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 120px 40px;
+            text-align: center;
+            background: linear-gradient(180deg, #111116 0%, #0b0b0b 100%);
+        }
+
+        .content-section h4 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            background: linear-gradient(45deg, #ffad36, #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .content-section p {
+            font-size: 1.25rem;
+            max-width: 850px;
+            margin: 0 auto;
+            line-height: 1.7;
+            color: #e0e0e0;
+            font-weight: 300;
+        }
     </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
 </head>
 <body>
 
@@ -85,32 +137,37 @@
         <a href="#" class="nav-logo">STING PRESENTATION</a>
     </nav>
 
-    <div class="scene-view">
-        <div class="loading" id="loader">Завантаження кадрів (0/90)...</div>
-        <canvas id="sequence-canvas"></canvas>
+    <div class="scroll-container">
+        <div class="sticky-scene">
+            <div class="loading" id="loader">Завантаження кадрів (0/90)...</div>
+            <canvas id="sequence-canvas"></canvas>
+        </div>
+    </div>
+
+    <div class="next-section">
+        <div class="content-section">
+            <h4>STING SYSTEM PREVIEW</h4>
+            <p>Презентація інноваційного комплексу Sting. Деталізований рендер оптичного модуля та захисного кейсу демонструє безкомпромісну надійність у будь-ких умовах. Прокручуйте сторінку, щоб дослідити кожен елемент інженерного рішення у динаміці.</p>
+        </div>
     </div>
 
     <script>
+        gsap.registerPlugin(ScrollTrigger);
+
         const canvas = document.getElementById("sequence-canvas");
         const context = canvas.getContext("2d");
         const loader = document.getElementById("loader");
 
-        // --- ТОЧНІ НАЛАШТУВАННЯ НА 90 КАДРІВ ---
-        const startFrame = 0;
-        const endFrame = 89;
+        // Твої налаштування сиквенції на 90 кадрів у папці img/
         const frameCount = 90; 
-        const fps = 30; // Швидкість відтворення
-        
-        // Шаблон назви файлів у папці img/
         const currentFrame = index => `img/3D_2_${index.toString().padStart(4, '0')}.png`;
 
         const images = [];
-        let currentFrameIndex = 0;
-        let loopCount = 0; 
-        let loadedCount = 0;
+        const sequenceState = { frame: 0 };
 
-        // Завантажуємо рівно 90 кадрів
-        for (let i = startFrame; i <= endFrame; i++) {
+        // Завантажуємо 90 кадрів
+        let loadedCount = 0;
+        for (let i = 0; i < frameCount; i++) {
             const img = new Image();
             img.src = currentFrame(i);
             img.onload = () => {
@@ -119,51 +176,76 @@
                     loader.innerText = `Завантаження кадрів (${loadedCount}/${frameCount})...`;
                 }
                 if (loadedCount === frameCount) {
-                    startPlayback();
+                    buildAnimation();
                 }
             };
             images.push(img);
         }
 
-        function startPlayback() {
+        function buildAnimation() {
             if (loader) {
                 loader.style.opacity = 0;
                 setTimeout(() => loader.style.display = "none", 500);
             }
             
-            // Встановлюємо вертикальну роздільну здатність полотна 1080x1920
             canvas.width = images[0].naturalWidth || 1080;
             canvas.height = images[0].naturalHeight || 1920;
 
             function drawFrame() {
                 context.clearRect(0, 0, canvas.width, canvas.height);
-                context.drawImage(images[currentFrameIndex], 0, 0);
+                context.drawImage(images[sequenceState.frame], 0, 0);
             }
 
             drawFrame();
 
-            const intervalTime = 1000 / fps;
-            const playInterval = setInterval(() => {
-                currentFrameIndex++;
-
-                // Якщо дійшли до кінця (89 кадру)
-                if (currentFrameIndex >= frameCount) {
-                    loopCount++; 
-
-                    if (loopCount < 2) {
-                        // Перше коло закінчилось -> повертаємо на 0 і запускаємо друге коло
-                        currentFrameIndex = 0;
-                    } else {
-                        // Друге коло закінчилось -> зупиняємо плеєр на фінальному кадрі
-                        clearInterval(playInterval);
-                        currentFrameIndex = frameCount - 1; 
-                        console.log("Презентацію Sting відтворено 2 рази. Зупинка.");
-                    }
+            // Створюємо таймлайн, прив'язаний до скролу
+            const mainTimeline = gsap.timeline({
+                scrollTrigger: {
+                    trigger: ".scroll-container",
+                    start: "top top",
+                    end: "bottom bottom",
+                    scrub: 0.15 // Чутливість та плавність ходу мишки
                 }
+            });
 
-                drawFrame();
-            }, intervalTime);
+            // МУЛЬТИТАЙМЛАЙН ХАК:
+            // Крок 1. Перше коло — програємо від 0 до 89 кадру (триває першу половину скролу сторінки)
+            mainTimeline.to(sequenceState, {
+                frame: frameCount - 1,
+                snap: "frame",
+                ease: "none",
+                duration: 1, // відносний час всередині таймлайну
+                onUpdate: drawFrame
+            });
+
+            // Крок 2. Друге коло — миттєво скидаємо на 0 і знову крутимо до 89 кадру (друга половина скролу сторінки)
+            mainTimeline.to(sequenceState, {
+                frame: 0,
+                snap: "frame",
+                ease: "none",
+                duration: 0, // Скидаємо миттєво між колами
+                onUpdate: drawFrame
+            });
+
+            mainTimeline.to(sequenceState, {
+                frame: frameCount - 1,
+                snap: "frame",
+                ease: "none",
+                duration: 1, // Програємо вдруге
+                onUpdate: drawFrame
+            });
         }
+
+        // Логіка виходу з анімації: коли доскролили до кінця, відео улітає вгору, відкриваючи текст
+        ScrollTrigger.create({
+            trigger: ".scroll-container",
+            start: "bottom bottom",
+            end: "bottom top",
+            scrub: true,
+            onUpdate: (self) => {
+                gsap.set(".sticky-scene", { translateY: -self.progress * 100 + "%" });
+            }
+        });
     </script>
 </body>
 </html>
