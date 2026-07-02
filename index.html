@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Sting - Presentation Loop</title>
+    <title>Sting - Interactive Presentation</title>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap');
@@ -18,7 +18,7 @@
             background-color: #0b0b0b;
             color: #fff;
             font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-            overflow: hidden; /* Ховаємо скрол взагалі, бо сайт тепер працює сам */
+            overflow: hidden; /* Скрол вимкнено, анімація програється сама */
             height: 100vh;
             width: 100%;
         }
@@ -49,7 +49,7 @@
             text-decoration: none;
         }
 
-        /* Повноекранна сцена для презентації */
+        /* Повноекранна сцена */
         .scene-view {
             position: relative;
             width: 100%;
@@ -58,12 +58,13 @@
             justify-content: center;
             align-items: center;
             background-color: #0b0b0b;
+            padding-top: 70px;
         }
 
         canvas {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: contain; /* Зберігає вертикальні пропорції 1080x1920 */
         }
 
         .loading {
@@ -94,21 +95,21 @@
         const context = canvas.getContext("2d");
         const loader = document.getElementById("loader");
 
-        // --- НАЛАШТУВАННЯ СИКВЕНЦІЇ ---
+        // --- ТОЧНІ НАЛАШТУВАННЯ НА 90 КАДРІВ ---
         const startFrame = 0;
         const endFrame = 89;
-        const frameCount = (endFrame - startFrame) + 1; // Усього 90 кадрів (від 0000 до 0089)
-        const fps = 24; // Швидкість відтворення (кадрів на секунду)
+        const frameCount = 90; 
+        const fps = 30; // Швидкість відтворення
         
-        // Переконайся, що назва та папка збігаються. Якщо вони лежать у папці img, додай її на початок: `img/3D_2_...`
-        const currentFrame = index => `3D_2_${index.toString().padStart(4, '0')}.png`;
+        // Шаблон назви файлів у папці img/
+        const currentFrame = index => `img/3D_2_${index.toString().padStart(4, '0')}.png`;
 
         const images = [];
         let currentFrameIndex = 0;
-        let loopCount = 0; // Лічильник прокручених кіл
+        let loopCount = 0; 
         let loadedCount = 0;
 
-        // Попереднє завантаження 90 кадрів у пам'ять
+        // Завантажуємо рівно 90 кадрів
         for (let i = startFrame; i <= endFrame; i++) {
             const img = new Image();
             img.src = currentFrame(i);
@@ -130,8 +131,9 @@
                 setTimeout(() => loader.style.display = "none", 500);
             }
             
-            canvas.width = images[0].naturalWidth || 1920;
-            canvas.height = images[0].naturalHeight || 1080;
+            // Встановлюємо вертикальну роздільну здатність полотна 1080x1920
+            canvas.width = images[0].naturalWidth || 1080;
+            canvas.height = images[0].naturalHeight || 1920;
 
             function drawFrame() {
                 context.clearRect(0, 0, canvas.width, canvas.height);
@@ -140,23 +142,22 @@
 
             drawFrame();
 
-            // Запускаємо інтервал відтворення на основі виставленого FPS
             const intervalTime = 1000 / fps;
             const playInterval = setInterval(() => {
                 currentFrameIndex++;
 
                 // Якщо дійшли до кінця (89 кадру)
                 if (currentFrameIndex >= frameCount) {
-                    loopCount++; // Фіксуємо, що коло завершилось
+                    loopCount++; 
 
                     if (loopCount < 2) {
-                        // Якщо це було перше коло — скидаємо на 0 і крутимо ще раз
+                        // Перше коло закінчилось -> повертаємо на 0 і запускаємо друге коло
                         currentFrameIndex = 0;
                     } else {
-                        // Якщо відкрутило друге коло — зупиняємо таймер на останньому кадрі
+                        // Друге коло закінчилось -> зупиняємо плеєр на фінальному кадрі
                         clearInterval(playInterval);
-                        currentFrameIndex = frameCount - 1; // Залишаємо фінальний кадр
-                        console.log("Відтворення завершено. Анімація програлася 2 рази.");
+                        currentFrameIndex = frameCount - 1; 
+                        console.log("Презентацію Sting відтворено 2 рази. Зупинка.");
                     }
                 }
 
