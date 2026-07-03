@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>Sting - Scroll Presentation Loop</title>
+    <title>Sting - Interactive Presentation</title>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap');
@@ -22,7 +22,7 @@
             scroll-behavior: auto;
         }
 
-        /* Шапка */
+        /* Верхня панель навігації */
         nav.main-nav {
             position: fixed;
             top: 0;
@@ -48,14 +48,14 @@
             text-decoration: none;
         }
 
-        /* Велика зона прокрутки для анімації */
+        /* Зона прокрутки для анімації девайсу */
         .scroll-container {
             position: relative;
             width: 100%;
-            height: 1000vh; /* Довжина скролу, щоб два кола анімації крутилися плавно */
+            height: 800vh; /* Глибина скролу для двох кіл */
         }
 
-        /* Зафіксований екран для Canvas */
+        /* Фіксована сцена під Canvas */
         .sticky-scene {
             position: fixed;
             top: 0;
@@ -73,8 +73,7 @@
         canvas {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Пропорції 1080x1920 */
-            pointer-events: none;
+            object-fit: contain; /* Чітко тримає вертикальні пропорції 1080x1920 */
         }
 
         .loading {
@@ -88,7 +87,7 @@
             transition: opacity 0.5s ease;
         }
 
-        /* Текстова секція, яка відкривається ПІСЛЯ завершення всіх кіл */
+        /* Текстова секція-опис в кінці */
         .next-section {
             position: relative;
             z-index: 10;
@@ -127,9 +126,6 @@
             font-weight: 300;
         }
     </style>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
 </head>
 <body>
 
@@ -151,101 +147,115 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+
     <script>
-        gsap.registerPlugin(ScrollTrigger);
+        // Перевірка завантаження GSAP
+        if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+            gsap.registerPlugin(ScrollTrigger);
+            initStingPresentation();
+        } else {
+            console.error("Помилка підключення GSAP CDN");
+        }
 
-        const canvas = document.getElementById("sequence-canvas");
-        const context = canvas.getContext("2d");
-        const loader = document.getElementById("loader");
+        function initStingPresentation() {
+            const canvas = document.getElementById("sequence-canvas");
+            const context = canvas.getContext("2d");
+            const loader = document.getElementById("loader");
 
-        // Твої налаштування сиквенції на 90 кадрів у папці img/
-        const frameCount = 90; 
-        const currentFrame = index => `img/3D_2_${index.toString().padStart(4, '0')}.png`;
+            // Налаштування нашої сиквенції з папки img/
+            const frameCount = 90; 
+            const currentFrame = index => `img/3D_2_${index.toString().padStart(4, '0')}.png`;
 
-        const images = [];
-        const sequenceState = { frame: 0 };
+            const images = [];
+            const sequenceState = { frame: 0 };
 
-        // Завантажуємо 90 кадрів
-        let loadedCount = 0;
-        for (let i = 0; i < frameCount; i++) {
-            const img = new Image();
-            img.src = currentFrame(i);
-            img.onload = () => {
-                loadedCount++;
+            // Попереднє завантаження 90 кадрів
+            let loadedCount = 0;
+            for (let i = 0; i < frameCount; i++) {
+                const img = new Image();
+                img.src = currentFrame(i);
+                img.onload = () => {
+                    loadedCount++;
+                    if (loader) {
+                        loader.innerText = `Завантаження кадрів (${loadedCount}/${frameCount})...`;
+                    }
+                    if (loadedCount === frameCount) {
+                        buildScrollAnimation();
+                    }
+                };
+                img.onerror = () => console.error("Помилка завантаження кадру:", img.src);
+                images.push(img);
+            }
+
+            function buildScrollAnimation() {
                 if (loader) {
-                    loader.innerText = `Завантаження кадрів (${loadedCount}/${frameCount})...`;
+                    loader.style.opacity = 0;
+                    setTimeout(() => loader.style.display = "none", 500);
                 }
-                if (loadedCount === frameCount) {
-                    buildAnimation();
+                
+                // Встановлюємо оригінальні вертикальні розміри Canvas
+                canvas.width = images[0].naturalWidth || 1080;
+                canvas.height = images[0].naturalHeight || 1920;
+
+                function drawFrame() {
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    context.drawImage(images[sequenceState.frame], 0, 0);
                 }
-            };
-            images.push(img);
+
+                // Малюємо перший кадр при старті
+                drawFrame();
+
+                // Таймлайн, прив'язаний до прокрутки сторінки
+                const mainTimeline = gsap.timeline({
+                    scrollTrigger: {
+                        trigger: ".scroll-container",
+                        start: "top top",
+                        end: "bottom bottom",
+                        scrub: 0.15 // Плавний відгук на рух коліщатка
+                    }
+                });
+
+                // Перше повне коло скролу (0 -> 89 кадр)
+                mainTimeline.to(sequenceState, {
+                    frame: frameCount - 1,
+                    snap: "frame",
+                    ease: "none",
+                    duration: 1,
+                    onUpdate: drawFrame
+                });
+
+                // Миттєве повернення на старт між колами
+                mainTimeline.to(sequenceState, {
+                    frame: 0,
+                    snap: "frame",
+                    ease: "none",
+                    duration: 0,
+                    onUpdate: drawFrame
+                });
+
+                // Друге повне коло скролу (0 -> 89 кадр)
+                mainTimeline.to(sequenceState, {
+                    frame: frameCount - 1,
+                    snap: "frame",
+                    ease: "none",
+                    duration: 1,
+                    onUpdate: drawFrame
+                });
+            }
+
+            // Плавний зсув усієї сцени вгору, коли скрол анімації закінчився
+            ScrollTrigger.create({
+                trigger: ".scroll-container",
+                start: "bottom bottom",
+                end: "bottom top",
+                scrub: true,
+                onUpdate: (self) => {
+                    gsap.set(".sticky-scene", { translateY: -self.progress * 100 + "%" });
+                }
+            });
         }
-
-        function buildAnimation() {
-            if (loader) {
-                loader.style.opacity = 0;
-                setTimeout(() => loader.style.display = "none", 500);
-            }
-            
-            canvas.width = images[0].naturalWidth || 1080;
-            canvas.height = images[0].naturalHeight || 1920;
-
-            function drawFrame() {
-                context.clearRect(0, 0, canvas.width, canvas.height);
-                context.drawImage(images[sequenceState.frame], 0, 0);
-            }
-
-            drawFrame();
-
-            // Створюємо таймлайн, прив'язаний до скролу
-            const mainTimeline = gsap.timeline({
-                scrollTrigger: {
-                    trigger: ".scroll-container",
-                    start: "top top",
-                    end: "bottom bottom",
-                    scrub: 0.15 // Чутливість та плавність ходу мишки
-                }
-            });
-
-            // МУЛЬТИТАЙМЛАЙН ХАК:
-            // Крок 1. Перше коло — програємо від 0 до 89 кадру (триває першу половину скролу сторінки)
-            mainTimeline.to(sequenceState, {
-                frame: frameCount - 1,
-                snap: "frame",
-                ease: "none",
-                duration: 1, // відносний час всередині таймлайну
-                onUpdate: drawFrame
-            });
-
-            // Крок 2. Друге коло — миттєво скидаємо на 0 і знову крутимо до 89 кадру (друга половина скролу сторінки)
-            mainTimeline.to(sequenceState, {
-                frame: 0,
-                snap: "frame",
-                ease: "none",
-                duration: 0, // Скидаємо миттєво між колами
-                onUpdate: drawFrame
-            });
-
-            mainTimeline.to(sequenceState, {
-                frame: frameCount - 1,
-                snap: "frame",
-                ease: "none",
-                duration: 1, // Програємо вдруге
-                onUpdate: drawFrame
-            });
-        }
-
-        // Логіка виходу з анімації: коли доскролили до кінця, відео улітає вгору, відкриваючи текст
-        ScrollTrigger.create({
-            trigger: ".scroll-container",
-            start: "bottom bottom",
-            end: "bottom top",
-            scrub: true,
-            onUpdate: (self) => {
-                gsap.set(".sticky-scene", { translateY: -self.progress * 100 + "%" });
-            }
-        });
     </script>
 </body>
 </html>
